@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Ottawa IT Jobs</title>
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <main>
+    <h1>Ottawa IT Jobs</h1>
+    <div id="jobs">Loading jobs...</div>
+  </main>
+
+  <script>
+    const publicVapidKey = "{{ vapid_public_key }}";
+
+    // Register service worker and subscribe for push
+    if ('serviceWorker' in navigator) {
+      (async () => {
+        try {
+          const reg = await navigator.serviceWorker.register('/static/sw.js', {scope: '/'});
+          // Ask permission
+          const perm = await Notification.requestPermission();
+          if (perm === 'granted') {
+            const sub = await reg.pushManager.subscribe({
+              userVisibleOnly: true,
+              applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
+            });
+            await fetch('/subscribe', {
+              method: 'POST',
+              body: JSON.stringify(sub),
+              headers: { 'Content-Type': 'application/json' }
+            });
+          }
+        } catch (e) {
+          console.error('SW/register error', e);
+        }
+      })();
+    }
+
+    function urlBase64ToUint8Array(base64String) {
+      const padding = '='.repeat((4 - base64String.length % 4) % 4);
+      const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+      const rawData = window.atob(base64);
+      return Uint8Array.from([...rawData].map(char => char.charCodeAt(0)));
+    }
+
+    async function loadJobs() {
+      try {
+        const res = await fetch('/jobs');
+        const jobs = await res.json();
+        const jobsDiv = document.getElementById('jobs');
+        jobsDiv.innerHTML = '';
+        if (!jobs || jobs.length === 0) jobsDiv.textContent = 'No jobs found.';
+        jobs.forEach(j => {
+          const el = document.createElement('div');
+          el.className = 'job';
+          el.innerHTML = '<strong>' + j.title + '</strong><br>' + j.company + ' — ' + j.location;
+          jobsDiv.appendChild(el);
+        });
+      } catch (e) {
+        document.getElementById('jobs').textContent = 'Error loading jobs.';
+      }
+    }
+
+    loadJobs();
+    setInterval(loadJobs, 60000);
+  </script>
+</body>
+</html>
